@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Update and upgrade system
+sudo apt update
+sudo apt upgrade -y
+
+# Install PHP 8.2 and necessary extensions
+sudo apt install -y software-properties-common
+sudo add-apt-repository ppa:ondrej/php -y
+sudo apt update
+sudo apt-get install -y php8.2 php8.2-cli php8.2-fpm php8.2-mysql php8.2-gd php8.2-mbstring php8.2-curl php8.2-xml php8.2-zip unzip curl
+
+# Install Composer
+sudo curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
+
+# Install Nginx
+sudo apt install -y nginx
+
+# Start Nginx
+sudo systemctl start nginx
+sudo systemctl enable nginx
+
+# Create a new Laravel project using PHP 8.2
+sudo composer create-project --prefer-dist laravel/laravel /var/www/html/laravel_project "8.*"
+
+# Set permissions
+sudo chown -R www-data:www-data /var/www/html/laravel_project
+sudo chmod -R 775 /var/www/html/laravel_project/storage
+
+# Configure Nginx for Laravel on port 8080
+sudo bash -c "cat >/etc/nginx/sites-available/laravel_project" << 'EOF'
+server {
+    listen 8080;
+    server_name localhost;
+
+    root /var/www/html/laravel_project/public;
+    index index.php index.html index.htm;
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+    }
+}
+EOF
+
+# Enable the Nginx configuration and restart Nginx
+sudo ln -s /etc/nginx/sites-available/laravel_project /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
